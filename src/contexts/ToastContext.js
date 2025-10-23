@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import globalNotificationManager from '../services/globalNotificationManager';
 
 const ToastContext = createContext();
 
@@ -31,18 +32,10 @@ export const ToastProvider = ({ children }) => {
       return;
     }
     
-    // Create a unique key for this message
-    const messageKey = messageId ? `${chatId}_${messageId}` : `${chatId}_${message}`;
+    // Use global notification manager for deduplication
+    globalNotificationManager.showNotification(message, chatId, messageId);
     
-    // Check if we've already notified about this message
-    if (notifiedMessages.has(messageKey)) {
-      console.log('ToastContext: Skipping notification - already notified about this message');
-      return;
-    }
-    
-    // Add this message to the notified set
-    setNotifiedMessages(prev => new Set([...prev, messageKey]));
-    
+    // Also show local toast
     console.log('ToastContext: Before setState - showToast:', showToast, 'toastMessage:', toastMessage);
     setToastMessage(message);
     setShowToast(true);
@@ -60,15 +53,8 @@ export const ToastProvider = ({ children }) => {
 
   const clearNotifiedMessages = (chatId) => {
     console.log('ToastContext: Clearing notified messages for chat:', chatId);
-    setNotifiedMessages(prev => {
-      const newSet = new Set();
-      for (const key of prev) {
-        if (!key.startsWith(`${chatId}_`)) {
-          newSet.add(key);
-        }
-      }
-      return newSet;
-    });
+    // Use global notification manager to clear notified messages
+    globalNotificationManager.clearNotifiedMessages(chatId);
   };
 
   const value = {

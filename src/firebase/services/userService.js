@@ -1,6 +1,7 @@
 // User service for Firebase operations
 import { doc, setDoc, getDoc, updateDoc, collection, query, where, onSnapshot, orderBy, serverTimestamp } from 'firebase/firestore';
 import { db } from '../config';
+import { processUsersAvatars } from '../../utils/avatarUtils';
 
 // Create or update user profile
 export const createUserProfile = async (userData) => {
@@ -65,10 +66,13 @@ export const getDiscoveryUsers = (currentUserId, callback) => {
         id: doc.id,
         ...doc.data()
       }))
-      .filter(user => user.id !== currentUserId); // Filter out current user in JavaScript
+      .filter(user => user.id !== currentUserId);
+    
+    // Process users to ensure correct avatars (developer accounts use admin.jpg)
+    const processedUsers = processUsersAvatars(allUsers); // Filter out current user in JavaScript
     
     // Custom ordering: Developer account first, then newest users
-    const sortedUsers = allUsers.sort((a, b) => {
+    const sortedUsers = processedUsers.sort((a, b) => {
       // Developer account (admin.jpg avatar) goes first
       const aIsDeveloper = a.avatar === "/images/admin.jpg";
       const bIsDeveloper = b.avatar === "/images/admin.jpg";
@@ -153,8 +157,11 @@ export const getUsersWithActiveStatus = (currentUserId, callback) => {
       }))
       .filter(user => user.id !== currentUserId);
     
+    // Process users to ensure correct avatars (developer accounts use admin.jpg)
+    const processedUsers = processUsersAvatars(allUsers);
+    
     // Custom ordering: Developer account first, then active users, then others
-    const sortedUsers = allUsers.sort((a, b) => {
+    const sortedUsers = processedUsers.sort((a, b) => {
       // Developer account (admin.jpg avatar) goes first
       const aIsDeveloper = a.avatar === "/images/admin.jpg";
       const bIsDeveloper = b.avatar === "/images/admin.jpg";

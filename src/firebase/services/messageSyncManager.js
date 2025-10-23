@@ -1,7 +1,7 @@
 // Centralized message sync manager to prevent duplicate notifications
 import { collection, query, where, onSnapshot, orderBy, limit, getDoc, doc, getDocs } from 'firebase/firestore';
 import { db } from '../config';
-import notificationService from '../../services/notificationService';
+import globalNotificationManager from '../../services/globalNotificationManager';
 
 class MessageSyncManager {
   constructor() {
@@ -163,8 +163,8 @@ class MessageSyncManager {
       console.log('MessageSyncManager: Showing notification:', notificationMessage);
       console.log('MessageSyncManager: Chat ID:', messageData.chatId);
       
-      // Use the reliable notification service
-      notificationService.showNotification(notificationMessage, messageData.chatId);
+      // Use the global notification manager
+      globalNotificationManager.showNotification(notificationMessage, messageData.chatId, messageData.id);
       
       // Also call the original handler if available (for backward compatibility)
       if (this.onNewMessage) {
@@ -182,7 +182,7 @@ class MessageSyncManager {
       // Show notification even if we can't get sender profile
       const messageContent = messageData.content || messageData.text || 'New message';
       const notificationMessage = `Someone: ${messageContent}`;
-      notificationService.showNotification(notificationMessage, messageData.chatId);
+      globalNotificationManager.showNotification(notificationMessage, messageData.chatId, messageData.id);
       
       if (this.onNewMessage) {
         this.onNewMessage({
@@ -263,5 +263,5 @@ export const getSyncStatus = () => {
 // Test notification function
 export const testNotification = () => {
   console.log('Testing notification system...');
-  notificationService.showNotification('Test notification from MessageSyncManager', 'test-chat');
+  globalNotificationManager.showNotification('Test notification from MessageSyncManager', 'test-chat');
 };

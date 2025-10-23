@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { sendGlobalMessage, getGlobalChatMessages } from '../firebase/services/globalChatService';
 import { toggleMessageReaction, getMessageReactions, getUserReaction, REACTION_OPTIONS } from '../firebase/services/reactionService';
 import { useToast } from '../contexts/ToastContext';
+import { getUserAvatar, isDeveloperAccount } from '../utils/avatarUtils';
 
 const GlobalChatScreen = ({ currentUser }) => {
   const navigate = useNavigate();

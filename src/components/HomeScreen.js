@@ -4,6 +4,8 @@ import { getUsersWithActiveStatus, setUserOnline, setUserOffline } from '../fire
 import { createMatch as createMatchService } from '../firebase/services/matchService';
 import { startMessageSync, stopMessageSync } from '../firebase/services/messageSyncManager';
 import { useToast } from '../contexts/ToastContext';
+import globalNotificationManager from '../services/globalNotificationManager';
+import { processUsersAvatars, getUserAvatar, getUserAgentImage, isDeveloperAccount } from '../utils/avatarUtils';
 
 const HomeScreen = ({ currentUser }) => {
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -48,7 +50,7 @@ const HomeScreen = ({ currentUser }) => {
       
       // Show toast notification for new message (with chat ID to prevent duplicates)
       const senderName = messageData.senderName || 'Someone';
-      showNotification(`${senderName}: ${messageData.content}`, messageData.chatId, messageData.id);
+      globalNotificationManager.showNotification(`${senderName}: ${messageData.content}`, messageData.chatId, messageData.id);
     };
 
     const handleChatUpdate = (chatId, latestMessage) => {
@@ -91,24 +93,8 @@ const HomeScreen = ({ currentUser }) => {
         // Filter out swiped users
         const filteredUsers = discoveredUsers.filter(user => !swipedUsers.has(user.id));
         
-        // Use user's avatar if available, otherwise use agent images
-        const usersWithImages = filteredUsers.map((user, index) => {
-          // Use user's avatar if it exists, otherwise use agent image
-          let agentImage;
-          if (user.avatar && user.avatar !== '') {
-            agentImage = user.avatar; // Use the user's actual avatar
-          } else {
-            // Fallback to agent image for users without avatars
-            const agent = user.favoriteAgent?.toLowerCase() || 'jett';
-            const uniqueSuffix = index % 3; // 0, 1, or 2
-            agentImage = `/images/${agent}${uniqueSuffix > 0 ? `_${uniqueSuffix}` : ''}.jpg`;
-          }
-          
-          return {
-            ...user,
-            agentImage: agentImage
-          };
-        });
+        // Process users to ensure correct avatars (developer accounts use admin.jpg)
+        const usersWithImages = processUsersAvatars(filteredUsers);
         
         console.log('Original users:', discoveredUsers.length, 'Filtered users:', filteredUsers.length);
         setUsers(usersWithImages);
@@ -414,7 +400,7 @@ const HomeScreen = ({ currentUser }) => {
                 <div className="flex items-end justify-between">
                   <div className="flex-1">
                     {/* Developer Tag - Above Name */}
-                    {currentUserData.avatar === "/images/admin.jpg" && (
+                    {isDeveloperAccount(currentUserData) && (
                       <div className="mb-2">
                         <div className="inline-flex items-center bg-gradient-to-r from-red-600/20 to-red-500/20 backdrop-blur-sm border border-red-500/30 rounded-full px-3 py-1 shadow-lg">
                           <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse mr-2"></div>

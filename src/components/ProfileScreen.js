@@ -4,6 +4,7 @@ import { startMessageSync, stopMessageSync } from '../firebase/services/messageS
 import { deleteUserAccount } from '../firebase/services/resetService';
 import { setUserOnline, setUserOffline } from '../firebase/services/userService';
 import { useToast } from '../contexts/ToastContext';
+import { getUserAvatar, isDeveloperAccount } from '../utils/avatarUtils';
 
 const ProfileScreen = ({ currentUser, onLogout, onProfileUpdate }) => {
   const navigate = useNavigate();
@@ -204,7 +205,7 @@ const ProfileScreen = ({ currentUser, onLogout, onProfileUpdate }) => {
         <div className="text-center mb-6">
           <div className="relative inline-block">
             <img
-              src={currentUser?.avatar || "/images/jett.jpg"}
+              src={getUserAvatar(currentUser)}
               alt="Profile"
               className="w-32 h-32 rounded-full border-4 border-valorant-red object-cover"
               onError={(e) => {

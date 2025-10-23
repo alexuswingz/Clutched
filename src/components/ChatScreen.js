@@ -7,6 +7,7 @@ import { getUserProfile, setUserOnline, setUserOffline } from '../firebase/servi
 import { useToast } from '../contexts/ToastContext';
 import { collection, query, orderBy, limit, getDocs, where, onSnapshot, getDoc, doc } from 'firebase/firestore';
 import { db } from '../firebase/config';
+import { getUserAvatar, getUserAgentImage, getChatAvatar, isDeveloperAccount, processUserAvatar } from '../utils/avatarUtils';
 
 const ChatScreen = ({ currentUser }) => {
   const navigate = useNavigate();
@@ -55,7 +56,7 @@ const ChatScreen = ({ currentUser }) => {
           id: directChatId,
           name: location.state.targetUser.username || location.state.targetUser.name,
           favoriteAgent: location.state.targetUser.favoriteAgent,
-          agentAvatar: location.state.targetUser.agentImage,
+          agentAvatar: getUserAgentImage(location.state.targetUser),
           lastMessage: "Start a conversation!",
           timestamp: new Date(),
           displayTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
@@ -149,7 +150,7 @@ const ChatScreen = ({ currentUser }) => {
               id: chatId, // Use consistent chat ID format
               name: user.username || user.name,
               favoriteAgent: user.favoriteAgent,
-              agentAvatar: `/images/${user.favoriteAgent?.toLowerCase() || 'jett'}.jpg`,
+              agentAvatar: getUserAgentImage(user),
               lastMessage: lastMessage,
               timestamp: lastTimestamp, // Keep as Date object for sorting
               displayTime: lastTimestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), // String for display
@@ -263,7 +264,7 @@ const ChatScreen = ({ currentUser }) => {
                     id: otherUserId,
                     name: userData.username || userData.name,
                     favoriteAgent: userData.favoriteAgent,
-                    agentImage: `/images/${userData.favoriteAgent?.toLowerCase() || 'jett'}.jpg`
+                    agentImage: getUserAgentImage(userData)
                   });
                   console.log('Set chat user info:', userData);
                 }
@@ -430,7 +431,7 @@ const ChatScreen = ({ currentUser }) => {
                   id: chatId,
                   name: user.username || user.name || 'Unknown User',
                   favoriteAgent: user.favoriteAgent || 'Unknown',
-                  agentAvatar: user.agentImage || user.avatar || '/images/default.jpg',
+                  agentAvatar: getUserAvatar(user),
                   lastMessage: lastMessage?.content || 'No messages yet',
                   timestamp: timestamp, // Keep as Date object for sorting
                   displayTime: timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), // String for display
@@ -443,7 +444,7 @@ const ChatScreen = ({ currentUser }) => {
                   id: chatId,
                   name: user.username || user.name || 'Unknown User',
                   favoriteAgent: user.favoriteAgent || 'Unknown',
-                  agentAvatar: user.agentImage || user.avatar || '/images/default.jpg',
+                  agentAvatar: getUserAvatar(user),
                   lastMessage: 'No messages yet',
                   timestamp: timestamp, // Keep as Date object for sorting
                   displayTime: 'No messages', // String for display
@@ -720,7 +721,7 @@ const ChatScreen = ({ currentUser }) => {
                   id: chatId,
                   name: user.username || user.name || 'Unknown User',
                   favoriteAgent: user.favoriteAgent || 'Unknown',
-                  agentAvatar: user.agentImage || user.avatar || '/images/default.jpg',
+                  agentAvatar: getUserAvatar(user),
                   lastMessage: lastMessage?.content || 'No messages yet',
                   timestamp: timestamp, // Keep as Date object for sorting
                   displayTime: timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), // String for display
@@ -740,7 +741,7 @@ const ChatScreen = ({ currentUser }) => {
                   id: chatId,
                   name: user.username || user.name || 'Unknown User',
                   favoriteAgent: user.favoriteAgent || 'Unknown',
-                  agentAvatar: user.agentImage || user.avatar || '/images/default.jpg',
+                  agentAvatar: getUserAvatar(user),
                   lastMessage: 'No messages yet',
                   timestamp: timestamp, // Keep as Date object for sorting
                   displayTime: 'No messages', // String for display

@@ -1,5 +1,5 @@
 // Database reset service for Firebase operations
-import { collection, getDocs, deleteDoc, doc, setDoc, query, where, getDoc } from 'firebase/firestore';
+import { collection, getDocs, deleteDoc, doc, setDoc, query, where, getDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../config';
 
 // Clear all messages from database
@@ -234,8 +234,8 @@ export const updateAlexusKarlAvatar = async () => {
     
     // Update the avatar and agentImage fields
     await updateDoc(alexusRef, {
-      avatar: '/images/jett.jpg',
-      agentImage: '/images/jett.jpg',
+      avatar: '/images/admin.jpg',
+      agentImage: '/images/admin.jpg',
       updatedAt: new Date()
     });
     
@@ -263,11 +263,13 @@ export const createDeveloperAccount = async () => {
       gender: 'Male',
       favoriteAgent: 'Jett',
       rank: 'Gold',
-      avatar: '/images/jett.jpg',
-      agentImage: '/images/jett.jpg',
+      avatar: '/images/admin.jpg',
+      agentImage: '/images/admin.jpg',
       createdAt: new Date(),
       updatedAt: new Date(),
-      isDeveloper: true
+      isDeveloper: true,
+      isActive: true,
+      lastSeen: new Date()
     };
     
     await setDoc(doc(db, 'users', developerId), developerData);

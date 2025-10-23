@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { resetDatabase, findDeveloperAccount, createDeveloperAccount, updateAlexusKarlAvatar } from '../firebase/services/resetService';
 import { testNotification } from '../firebase/services/messageSyncManager';
+import { setUserOnline } from '../firebase/services/userService';
 
 const LoginScreen = () => {
   const navigate = useNavigate();
@@ -49,7 +50,7 @@ const LoginScreen = () => {
     }
   };
 
-  const handleLoginAsDeveloper = (developerData) => {
+  const handleLoginAsDeveloper = async (developerData) => {
     console.log('Auto-logging in as developer:', developerData);
     
     // Clear any existing cache first
@@ -63,6 +64,14 @@ const LoginScreen = () => {
         localStorage.removeItem(key);
       }
     });
+    
+    // Set developer account as online in Firebase
+    try {
+      await setUserOnline(developerData.id);
+      console.log('Developer account set as online in Firebase');
+    } catch (error) {
+      console.error('Error setting developer account online:', error);
+    }
     
     // Save developer account to localStorage
     localStorage.setItem('clutched_user', JSON.stringify(developerData));
@@ -158,8 +167,8 @@ const LoginScreen = () => {
       id: 'dev_1761178419119',
       username: 'Alexus Karl',
       email: 'alexus@clutched.app',
-      avatar: '/images/jett.jpg',
-      agentImage: '/images/jett.jpg',
+      avatar: '/images/admin.jpg',
+      agentImage: '/images/admin.jpg',
       rank: 'Radiant',
       level: 420,
       favoriteAgent: 'Jett',
@@ -168,6 +177,8 @@ const LoginScreen = () => {
       age: 25,
       gender: 'Female',
       isDeveloper: true,
+      isActive: true,
+      lastSeen: new Date(),
       createdAt: new Date(),
       updatedAt: new Date()
     };
