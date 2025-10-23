@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { startMessageSync, stopMessageSync } from '../firebase/services/messageSyncManager';
 import { deleteUserAccount } from '../firebase/services/resetService';
+import { setUserOnline, setUserOffline } from '../firebase/services/userService';
 import { useToast } from '../contexts/ToastContext';
 
 const ProfileScreen = ({ currentUser, onLogout, onProfileUpdate }) => {
@@ -23,6 +24,20 @@ const ProfileScreen = ({ currentUser, onLogout, onProfileUpdate }) => {
     location: currentUser?.location || "Los Angeles, CA",
     favoriteAgent: currentUser?.favoriteAgent || "Jett"
   });
+
+  // Set user as online when component mounts
+  useEffect(() => {
+    if (currentUser?.id) {
+      setUserOnline(currentUser.id);
+    }
+    
+    // Set user as offline when component unmounts
+    return () => {
+      if (currentUser?.id) {
+        setUserOffline(currentUser.id);
+      }
+    };
+  }, [currentUser?.id]);
 
   // Set up global message sync for notifications
   useEffect(() => {

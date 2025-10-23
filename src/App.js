@@ -6,7 +6,7 @@ import ProfileScreen from './components/ProfileScreen';
 import ChatScreen from './components/ChatScreen';
 import GlobalChatScreen from './components/GlobalChatScreen';
 import LoginScreen from './components/LoginScreen';
-import { createUserProfile, updateUserProfile } from './firebase/services/userService';
+import { createUserProfile, updateUserProfile, setUserOffline } from './firebase/services/userService';
 import { clearInvalidUserCache } from './firebase/services/resetService';
 import SimpleToast from './components/SimpleToast';
 import { ToastProvider, useToast } from './contexts/ToastContext';
@@ -29,6 +29,50 @@ function AppContent() {
       delete window.toastContext;
     };
   }, [showNotification]);
+
+  // Handle page visibility changes for active status
+  useEffect(() => {
+    const handleVisibilityChange = async () => {
+      if (currentUser?.id) {
+        if (document.hidden) {
+          // Page is hidden, set user as offline
+          try {
+            await setUserOffline(currentUser.id);
+          } catch (error) {
+            console.error('Error setting user offline on page hide:', error);
+          }
+        } else {
+          // Page is visible, set user as online
+          try {
+            const { setUserOnline } = await import('./firebase/services/userService');
+            await setUserOnline(currentUser.id);
+          } catch (error) {
+            console.error('Error setting user online on page show:', error);
+          }
+        }
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    
+    // Set user offline when page is about to unload
+    const handleBeforeUnload = async () => {
+      if (currentUser?.id) {
+        try {
+          await setUserOffline(currentUser.id);
+        } catch (error) {
+          console.error('Error setting user offline on page unload:', error);
+        }
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, [currentUser?.id]);
   
 
 
@@ -99,7 +143,16 @@ function AppContent() {
     }
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    // Set user as offline before logging out
+    if (currentUser?.id) {
+      try {
+        await setUserOffline(currentUser.id);
+      } catch (error) {
+        console.error('Error setting user offline on logout:', error);
+      }
+    }
+    
     setCurrentUser(null);
     setHasProfile(false);
     // Clear from localStorage

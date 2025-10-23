@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getDiscoveryUsers } from '../firebase/services/userService';
+import { getUsersWithActiveStatus, setUserOnline, setUserOffline } from '../firebase/services/userService';
 import { createMatch as createMatchService } from '../firebase/services/matchService';
 import { startMessageSync, stopMessageSync } from '../firebase/services/messageSyncManager';
 import { useToast } from '../contexts/ToastContext';
@@ -69,11 +69,25 @@ const HomeScreen = ({ currentUser }) => {
     };
   }, [currentUser?.id]);
 
-  // Real-time user discovery from Firebase
+  // Set user as online when component mounts
+  useEffect(() => {
+    if (currentUser?.id) {
+      setUserOnline(currentUser.id);
+    }
+    
+    // Set user as offline when component unmounts
+    return () => {
+      if (currentUser?.id) {
+        setUserOffline(currentUser.id);
+      }
+    };
+  }, [currentUser?.id]);
+
+  // Real-time user discovery from Firebase with active status
   useEffect(() => {
     if (!currentUser?.id) return;
 
-    const unsubscribe = getDiscoveryUsers(currentUser.id, (discoveredUsers) => {
+    const unsubscribe = getUsersWithActiveStatus(currentUser.id, (discoveredUsers) => {
         // Filter out swiped users
         const filteredUsers = discoveredUsers.filter(user => !swipedUsers.has(user.id));
         
@@ -427,6 +441,12 @@ const HomeScreen = ({ currentUser }) => {
                       <span className="bg-valorant-red text-white px-2 py-0.5 sm:px-3 sm:py-1 rounded-lg text-xs sm:text-sm font-bold">
                         {currentUserData.rank}
                       </span>
+                      {currentUserData.isCurrentlyActive && (
+                        <div className="flex items-center space-x-1">
+                          <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                          <span className="text-green-400 text-xs font-semibold">Online</span>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>

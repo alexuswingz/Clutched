@@ -3,7 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { getUserMatches } from '../firebase/services/matchService';
 import { getChatMessages, sendMessage, markMessagesAsRead } from '../firebase/services/messageService';
 import { startMessageSync, stopMessageSync, addChatListener } from '../firebase/services/messageSyncManager';
-import { getUserProfile } from '../firebase/services/userService';
+import { getUserProfile, setUserOnline, setUserOffline } from '../firebase/services/userService';
 import { useToast } from '../contexts/ToastContext';
 import { collection, query, orderBy, limit, getDocs, where, onSnapshot, getDoc, doc } from 'firebase/firestore';
 import { db } from '../firebase/config';
@@ -23,6 +23,20 @@ const ChatScreen = ({ currentUser }) => {
   const [directChatUser, setDirectChatUser] = useState(null);
   const [chatInitialized, setChatInitialized] = useState(false);
   const [chatUserInfo, setChatUserInfo] = useState(null);
+
+  // Set user as online when component mounts
+  useEffect(() => {
+    if (currentUser?.id) {
+      setUserOnline(currentUser.id);
+    }
+    
+    // Set user as offline when component unmounts
+    return () => {
+      if (currentUser?.id) {
+        setUserOffline(currentUser.id);
+      }
+    };
+  }, [currentUser?.id]);
 
     // Check for direct chat user from navigation
     useEffect(() => {
@@ -47,6 +61,7 @@ const ChatScreen = ({ currentUser }) => {
           displayTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
           unread: 0,
           online: true,
+          isCurrentlyActive: true,
           otherUserId: location.state.targetUser.id
         });
         setIsLoading(false);
@@ -54,12 +69,12 @@ const ChatScreen = ({ currentUser }) => {
         console.log('ChatScreen: Chat initialized successfully');
       } else {
         console.log('ChatScreen: No direct chat user, loading matches...');
-        // Set a timeout to prevent infinite loading
+        // Set a shorter timeout to prevent infinite loading
         const timeout = setTimeout(() => {
           console.log('ChatScreen: Timeout reached, stopping loading');
           setIsLoading(false);
           setChatInitialized(true);
-        }, 3000);
+        }, 2000);
         
         return () => clearTimeout(timeout);
       }
@@ -125,6 +140,11 @@ const ChatScreen = ({ currentUser }) => {
           
           // Only return chat if there are messages
           if (hasMessages) {
+            // Calculate if user is currently active (online within last 5 minutes)
+            const isCurrentlyActive = user.isActive && 
+              user.lastSeen && 
+              (new Date().getTime() - user.lastSeen.toDate().getTime()) < 5 * 60 * 1000;
+            
             return {
               id: chatId, // Use consistent chat ID format
               name: user.username || user.name,
@@ -135,6 +155,7 @@ const ChatScreen = ({ currentUser }) => {
               displayTime: lastTimestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), // String for display
               unread: unreadCount,
               online: true,
+              isCurrentlyActive: isCurrentlyActive,
               otherUserId: user.id
             };
           }
@@ -203,7 +224,9 @@ const ChatScreen = ({ currentUser }) => {
                     ...c,
                     lastMessage: latestMessage.content,
                     timestamp: latestMessage.timestamp.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-                    unread: unreadCount
+                    unread: unreadCount,
+                    // Keep existing isCurrentlyActive status or update if needed
+                    isCurrentlyActive: c.isCurrentlyActive
                   }
                 : c
             )
@@ -535,12 +558,18 @@ const ChatScreen = ({ currentUser }) => {
                             return data.senderId !== currentUser.id && data.read === false;
                           }).length;
 
+                          // Calculate if user is currently active
+                          const isCurrentlyActive = user.isActive && 
+                            user.lastSeen && 
+                            (new Date().getTime() - user.lastSeen.toDate().getTime()) < 5 * 60 * 1000;
+
                           return {
                             ...user,
                             chatId: userChatId,
                             lastMessage: latestMessage.content,
                             timestamp: latestMessage.timestamp.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-                            unread: unreadCount
+                            unread: unreadCount,
+                            isCurrentlyActive: isCurrentlyActive
                           };
                         }
                       } catch (error) {
@@ -681,6 +710,12 @@ const ChatScreen = ({ currentUser }) => {
                 }
                 
                 const timestamp = lastMessage?.timestamp?.toDate ? lastMessage.timestamp.toDate() : (lastMessage?.timestamp || new Date('1970-01-01'));
+                
+                // Calculate if user is currently active
+                const isCurrentlyActive = user.isActive && 
+                  user.lastSeen && 
+                  (new Date().getTime() - user.lastSeen.toDate().getTime()) < 5 * 60 * 1000;
+                
                 return {
                   id: chatId,
                   name: user.username || user.name || 'Unknown User',
@@ -689,11 +724,18 @@ const ChatScreen = ({ currentUser }) => {
                   lastMessage: lastMessage?.content || 'No messages yet',
                   timestamp: timestamp, // Keep as Date object for sorting
                   displayTime: timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), // String for display
-                  unreadCount: 0 // We'll calculate this separately if needed
+                  unreadCount: 0, // We'll calculate this separately if needed
+                  isCurrentlyActive: isCurrentlyActive
                 };
               } catch (error) {
                 console.error('Error getting latest message for chat:', chatId, error);
                 const timestamp = new Date('1970-01-01');
+                
+                // Calculate if user is currently active
+                const isCurrentlyActive = user.isActive && 
+                  user.lastSeen && 
+                  (new Date().getTime() - user.lastSeen.toDate().getTime()) < 5 * 60 * 1000;
+                
                 return {
                   id: chatId,
                   name: user.username || user.name || 'Unknown User',
@@ -702,7 +744,8 @@ const ChatScreen = ({ currentUser }) => {
                   lastMessage: 'No messages yet',
                   timestamp: timestamp, // Keep as Date object for sorting
                   displayTime: 'No messages', // String for display
-                  unreadCount: 0
+                  unreadCount: 0,
+                  isCurrentlyActive: isCurrentlyActive
                 };
               }
             })
@@ -1026,7 +1069,9 @@ const ChatScreen = ({ currentUser }) => {
     console.log('ChatScreen render - selectedChat:', selectedChat);
     console.log('ChatScreen render - isLoading:', isLoading);
     console.log('ChatScreen render - activeChat:', activeChat);
+    console.log('ChatScreen render - chats.length:', chats.length);
     console.log('ChatScreen render - should show chat interface:', !!(selectedChat || activeChat));
+    console.log('ChatScreen render - location.state:', location.state);
   }
 
   // Force show chat if we have a direct chat user (bypass all loading states)
@@ -1069,7 +1114,7 @@ const ChatScreen = ({ currentUser }) => {
                     e.target.className = 'w-10 h-10 rounded-full object-cover';
                   }}
                 />
-                <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-black"></div>
+                <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-black animate-pulse"></div>
               </div>
               <div>
                 <h2 className="text-white font-semibold">{directChatUser?.username || directChatUser?.name || 'Unknown User'}</h2>
@@ -1152,8 +1197,8 @@ const ChatScreen = ({ currentUser }) => {
     );
   }
 
-  // Show loading state only if no chat is active and no direct chat user
-  if (isLoading && !activeChat && !directChatUser) {
+  // Show loading state only if we're still loading and no direct chat user
+  if (isLoading && !directChatUser && !location.state?.targetUser) {
     console.log('ChatScreen: Showing loading state');
     return (
       <div className="h-screen bg-valorant-dark flex items-center justify-center animate-fade-in">
@@ -1313,6 +1358,11 @@ const ChatScreen = ({ currentUser }) => {
     );
   }
 
+  // Always show chat list if no active chat and not loading
+  if (!activeChat && !directChatUser && !location.state?.targetUser) {
+    console.log('ChatScreen: Showing chat list');
+  }
+
   return (
     <div className="h-screen bg-valorant-dark flex flex-col animate-fade-in" style={{ height: '100vh', height: '100dvh' }}>
       {!activeChat ? (
@@ -1423,22 +1473,32 @@ const ChatScreen = ({ currentUser }) => {
                             e.target.className = 'w-12 h-12 rounded-full object-cover';
                           }}
                         />
-                        {chat.online && (
-                          <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-black"></div>
+                        {chat.isCurrentlyActive && (
+                          <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-black animate-pulse"></div>
                         )}
                       </div>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center justify-between">
-                            <h3 className="text-white font-semibold truncate">{chat.name}</h3>
+                            <div className="flex items-center space-x-2">
+                              <h3 className="text-white font-semibold truncate">{chat.name}</h3>
+                              {chat.isCurrentlyActive && (
+                                <div className="flex items-center space-x-1">
+                                  <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                                  <span className="text-green-400 text-xs font-semibold">Online</span>
+                                </div>
+                              )}
+                            </div>
                             <span className="text-gray-400 text-xs">{chat.displayTime || chat.timestamp}</span>
                           </div>
                           <div className="flex items-center justify-between">
                             <p className="text-gray-400 text-sm truncate">{chat.lastMessage}</p>
-                            {chat.unread > 0 && (
-                              <span className="bg-valorant-red text-white text-xs px-2 py-1 rounded-full">
-                                {chat.unread}
-                              </span>
-                            )}
+                            <div className="flex items-center space-x-2">
+                              {chat.unread > 0 && (
+                                <span className="bg-valorant-red text-white text-xs px-2 py-1 rounded-full">
+                                  {chat.unread}
+                                </span>
+                              )}
+                            </div>
                           </div>
                         </div>
                     </div>
@@ -1484,12 +1544,20 @@ const ChatScreen = ({ currentUser }) => {
                     e.target.className = 'w-10 h-10 rounded-full object-cover';
                   }}
                 />
-                {(selectedChat?.online || directChatUser) && (
-                  <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-black"></div>
+                {(selectedChat?.isCurrentlyActive || directChatUser) && (
+                  <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-black animate-pulse"></div>
                 )}
               </div>
               <div>
-                <h2 className="text-white font-semibold">{selectedChat?.name || directChatUser?.name || directChatUser?.username || chatUserInfo?.name || 'Unknown User'}</h2>
+                <div className="flex items-center space-x-2">
+                  <h2 className="text-white font-semibold">{selectedChat?.name || directChatUser?.name || directChatUser?.username || chatUserInfo?.name || 'Unknown User'}</h2>
+                  {(selectedChat?.isCurrentlyActive || directChatUser) && (
+                    <div className="flex items-center space-x-1">
+                      <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                      <span className="text-green-400 text-xs font-semibold">Online</span>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           </div>
