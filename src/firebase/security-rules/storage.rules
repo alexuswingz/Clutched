@@ -1,11 +1,23 @@
 rules_version = '2';
+
+// Firebase Storage Security Rules
 service firebase.storage {
   match /b/{bucket}/o {
-    // Allow read/write access to all files for now
-    // Since we're not using authentication, we'll use open access
-    // In production, you might want to add more specific rules
+    // Allow read access to all files
     match /{allPaths=**} {
-      allow read, write: if true;
+      allow read: if true;
     }
+    
+    // Allow write access for development (more permissive)
+    match /users/{userId}/{fileName} {
+      allow write: if true; // Allow all writes for development
+    }
+    
+    // Production rules (uncomment for production)
+    // match /users/{userId}/{fileName} {
+    //   allow write: if request.auth != null && 
+    //     (request.auth.uid == userId || 
+    //      request.auth.token.admin == true);
+    // }
   }
 }

@@ -5,7 +5,7 @@ import { createMatch as createMatchService } from '../firebase/services/matchSer
 import { startMessageSync, stopMessageSync } from '../firebase/services/messageSyncManager';
 import { useToast } from '../contexts/ToastContext';
 import globalNotificationManager from '../services/globalNotificationManager';
-import { processUsersAvatars, getUserAvatar, getUserAgentImage, isDeveloperAccount } from '../utils/avatarUtils';
+import { processUsersAvatars, getUserAvatar, getUserAgentImage, isDeveloperAccount, getUserRoleBadge } from '../utils/avatarUtils';
 
 const HomeScreen = ({ currentUser }) => {
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -367,6 +367,18 @@ const HomeScreen = ({ currentUser }) => {
             >
               👤 Profile
             </button>
+            {/* Admin Panel Link - Only show for admin/developer users */}
+            {(currentUser?.isDeveloper || currentUser?.username === 'Alexus Karl' || currentUser?.id === 'dev_1761178419119') && (
+              <button
+                onClick={() => {
+                  setShowMenu(false);
+                  setTimeout(() => handleNavigation('/auth/admin'), 150);
+                }}
+                className="w-full text-left text-white hover:text-valorant-red transition-colors py-2 flex items-center text-sm sm:text-base"
+              >
+                ⚙️ Admin Panel
+              </button>
+            )}
           </div>
         </div>
       )}
@@ -405,6 +417,15 @@ const HomeScreen = ({ currentUser }) => {
                         <div className="inline-flex items-center bg-gradient-to-r from-red-600/20 to-red-500/20 backdrop-blur-sm border border-red-500/30 rounded-full px-3 py-1 shadow-lg">
                           <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse mr-2"></div>
                           <span className="text-red-300 font-bold text-xs tracking-wider">DEVELOPER</span>
+                        </div>
+                      </div>
+                    )}
+                    
+                    {/* Role Badge - Positioned above name, left aligned */}
+                    {getUserRoleBadge(currentUserData) && (
+                      <div className="mb-3 flex justify-start">
+                        <div className={`inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-bold tracking-wider uppercase border ${getUserRoleBadge(currentUserData).bgColor} ${getUserRoleBadge(currentUserData).color} ${getUserRoleBadge(currentUserData).borderColor}`}>
+                          {getUserRoleBadge(currentUserData).text}
                         </div>
                       </div>
                     )}

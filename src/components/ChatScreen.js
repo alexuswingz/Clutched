@@ -7,7 +7,7 @@ import { getUserProfile, setUserOnline, setUserOffline } from '../firebase/servi
 import { useToast } from '../contexts/ToastContext';
 import { collection, query, orderBy, limit, getDocs, where, onSnapshot, getDoc, doc } from 'firebase/firestore';
 import { db } from '../firebase/config';
-import { getUserAvatar, getUserAgentImage, getChatAvatar, isDeveloperAccount, processUserAvatar } from '../utils/avatarUtils';
+import { getUserAvatar, getUserAgentImage, getChatAvatar, isDeveloperAccount, processUserAvatar, getUserRoleBadge } from '../utils/avatarUtils';
 
 const ChatScreen = ({ currentUser }) => {
   const navigate = useNavigate();
@@ -1107,7 +1107,7 @@ const ChatScreen = ({ currentUser }) => {
               </button>
               <div className="relative">
                 <img
-                  src={directChatUser?.agentImage || '/images/default.jpg'}
+                  src={getUserAvatar(directChatUser)}
                   alt={directChatUser?.favoriteAgent || 'Agent'}
                   className="w-10 h-10 rounded-full object-cover"
                   onError={(e) => {
@@ -1143,7 +1143,7 @@ const ChatScreen = ({ currentUser }) => {
                 >
                   {msg.senderId !== currentUser.id && (
                       <img
-                        src={directChatUser?.agentImage || '/images/default.jpg'}
+                        src={getUserAvatar(directChatUser)}
                         alt={directChatUser?.favoriteAgent || 'Agent'}
                         className="w-8 h-8 rounded-full object-cover mr-2 mt-1"
                         onError={(e) => {
@@ -1266,7 +1266,7 @@ const ChatScreen = ({ currentUser }) => {
               </button>
               <div className="relative">
                 <img
-                  src={emergencyChat.agentAvatar}
+                  src={getChatAvatar(emergencyChat)}
                   alt={emergencyChat.favoriteAgent}
                   className="w-10 h-10 rounded-full object-cover"
                   onError={(e) => {
@@ -1304,7 +1304,7 @@ const ChatScreen = ({ currentUser }) => {
                 >
                   {msg.senderId !== currentUser.id && emergencyChat && (
                       <img
-                        src={emergencyChat.agentAvatar}
+                        src={getChatAvatar(emergencyChat)}
                         alt={emergencyChat.favoriteAgent}
                         className="w-8 h-8 rounded-full object-cover mr-2 mt-1"
                         onError={(e) => {
@@ -1466,7 +1466,7 @@ const ChatScreen = ({ currentUser }) => {
                     <div className="flex items-center space-x-4">
                       <div className="relative">
                         <img
-                          src={chat.agentAvatar}
+                          src={getChatAvatar(chat)}
                           alt={chat.favoriteAgent}
                           className="w-12 h-12 rounded-full object-cover"
                           onError={(e) => {
@@ -1537,7 +1537,7 @@ const ChatScreen = ({ currentUser }) => {
               </button>
               <div className="relative">
                 <img
-                  src={selectedChat?.agentAvatar || directChatUser?.agentImage || chatUserInfo?.agentImage || '/images/default.jpg'}
+                  src={getChatAvatar(selectedChat) || getUserAvatar(directChatUser) || getUserAvatar(chatUserInfo) || '/images/default.jpg'}
                   alt={selectedChat?.favoriteAgent || directChatUser?.favoriteAgent || chatUserInfo?.favoriteAgent || 'Agent'}
                   className="w-10 h-10 rounded-full object-cover"
                   onError={(e) => {
@@ -1583,7 +1583,7 @@ const ChatScreen = ({ currentUser }) => {
                 >
                   {msg.senderId !== currentUser.id && (selectedChat || directChatUser) && (
                     <img
-                      src={selectedChat?.agentAvatar || directChatUser?.agentImage || chatUserInfo?.agentImage || '/images/default.jpg'}
+                      src={getChatAvatar(selectedChat) || getUserAvatar(directChatUser) || getUserAvatar(chatUserInfo) || '/images/default.jpg'}
                       alt={selectedChat?.favoriteAgent || directChatUser?.favoriteAgent || chatUserInfo?.favoriteAgent || 'Agent'}
                       className="w-8 h-8 rounded-full object-cover mr-2 mt-1"
                       onError={(e) => {

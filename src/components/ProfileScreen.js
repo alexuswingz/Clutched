@@ -4,7 +4,9 @@ import { startMessageSync, stopMessageSync } from '../firebase/services/messageS
 import { deleteUserAccount } from '../firebase/services/resetService';
 import { setUserOnline, setUserOffline } from '../firebase/services/userService';
 import { useToast } from '../contexts/ToastContext';
-import { getUserAvatar, isDeveloperAccount } from '../utils/avatarUtils';
+import { getUserAvatar, isDeveloperAccount, getUserRoleBadge, processUserAvatar } from '../utils/avatarUtils';
+import { doc, getDoc } from 'firebase/firestore';
+import { db } from '../firebase/config';
 
 const ProfileScreen = ({ currentUser, onLogout, onProfileUpdate }) => {
   const navigate = useNavigate();
@@ -12,7 +14,49 @@ const ProfileScreen = ({ currentUser, onLogout, onProfileUpdate }) => {
   const [showMenu, setShowMenu] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [freshUserData, setFreshUserData] = useState(null);
   const { showNotification } = useToast();
+  
+  // Fetch fresh user data to get updated custom images
+  const fetchFreshUserData = async () => {
+    if (!currentUser?.id) return;
+    
+    try {
+      const userRef = doc(db, 'users', currentUser.id);
+      const userDoc = await getDoc(userRef);
+      
+      if (userDoc.exists()) {
+        const userData = userDoc.data();
+        setFreshUserData(userData);
+        console.log('Fresh user data loaded:', userData);
+      }
+    } catch (error) {
+      console.error('Error fetching fresh user data:', error);
+    }
+  };
+  
+  // Fetch fresh data on component mount and when component becomes visible
+  useEffect(() => {
+    fetchFreshUserData();
+  }, [currentUser?.id]);
+  
+  // Refresh data when component becomes visible (user navigates back to profile)
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        fetchFreshUserData();
+      }
+    };
+    
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, []);
+  
+  // Use fresh user data if available, otherwise fall back to currentUser
+  const userData = freshUserData || currentUser;
+  
+  // Process user data to ensure correct avatar handling
+  const processedUser = processUserAvatar(userData);
   
   // Vibration function for ProfileScreen
   const vibrate = () => {
@@ -25,6 +69,18 @@ const ProfileScreen = ({ currentUser, onLogout, onProfileUpdate }) => {
     location: currentUser?.location || "Los Angeles, CA",
     favoriteAgent: currentUser?.favoriteAgent || "Jett"
   });
+  
+  // Update profile data when fresh user data is loaded
+  useEffect(() => {
+    if (freshUserData) {
+      setProfileData({
+        bio: freshUserData.bio || "Looking for my duo partner in crime! 🔥",
+        location: freshUserData.location || "Los Angeles, CA",
+        favoriteAgent: freshUserData.favoriteAgent || "Jett"
+      });
+    }
+  }, [freshUserData]);
+  
 
   // Set user as online when component mounts
   useEffect(() => {
@@ -96,6 +152,7 @@ const ProfileScreen = ({ currentUser, onLogout, onProfileUpdate }) => {
     
     console.log('Profile updated:', profileData);
   };
+
 
   const handleDeleteAccount = async () => {
     if (!currentUser?.id) return;
@@ -205,7 +262,7 @@ const ProfileScreen = ({ currentUser, onLogout, onProfileUpdate }) => {
         <div className="text-center mb-6">
           <div className="relative inline-block">
             <img
-              src={getUserAvatar(currentUser)}
+              src={getUserAvatar(processedUser)}
               alt="Profile"
               className="w-32 h-32 rounded-full border-4 border-valorant-red object-cover"
               onError={(e) => {
@@ -213,13 +270,21 @@ const ProfileScreen = ({ currentUser, onLogout, onProfileUpdate }) => {
                 e.target.className = 'w-32 h-32 rounded-full border-4 border-valorant-red object-cover';
               }}
             />
+            {/* Role Badge */}
+            {getUserRoleBadge(processedUser) && (
+              <div className={`absolute -bottom-2 -right-2 ${getUserRoleBadge(processedUser).bgColor} ${getUserRoleBadge(processedUser).color} text-xs font-bold px-2 py-1 rounded-lg border ${getUserRoleBadge(processedUser).borderColor}`}>
+                {getUserRoleBadge(processedUser).text}
+              </div>
+            )}
           </div>
-          <h2 className="text-2xl font-bold text-white mt-4">{currentUser?.username}</h2>
+          
+          <h2 className="text-2xl font-bold text-white mt-4">{userData?.username}</h2>
           <div className="flex items-center justify-center space-x-2 mt-2">
             <span className="bg-valorant-red text-white px-3 py-1 rounded-full text-sm font-semibold">
-              {currentUser?.rank || "Radiant"}
+              {userData?.rank || "Radiant"}
             </span>
           </div>
+          
         </div>
 
         {/* Profile Details */}

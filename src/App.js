@@ -6,6 +6,7 @@ import ProfileScreen from './components/ProfileScreen';
 import ChatScreen from './components/ChatScreen';
 import GlobalChatScreen from './components/GlobalChatScreen';
 import LoginScreen from './components/LoginScreen';
+import AdminControlPage from './components/AdminControlPage';
 import { createUserProfile, updateUserProfile, setUserOffline } from './firebase/services/userService';
 import { clearInvalidUserCache } from './firebase/services/resetService';
 import SimpleToast from './components/SimpleToast';
@@ -233,6 +234,14 @@ function AppContent() {
             <Route 
               path="/login" 
               element={<LoginScreen />} 
+            />
+            <Route 
+              path="/auth/admin" 
+              element={
+                hasProfile ? 
+                  <AdminControlPage currentUser={currentUser} /> : 
+                  <Navigate to="/" replace />
+              } 
             />
           </Routes>
           

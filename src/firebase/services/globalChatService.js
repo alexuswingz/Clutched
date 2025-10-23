@@ -4,7 +4,7 @@ import { db } from '../config';
 import { containsProfanity, filterProfanity } from '../../utils/profanityFilter';
 
 // Send a message to global chat
-export const sendGlobalMessage = async (senderId, senderName, content, senderAvatar = null, senderAge = null, senderGender = null) => {
+export const sendGlobalMessage = async (senderId, senderName, content, senderAvatar = null, senderAge = null, senderGender = null, senderRole = null) => {
   try {
     // Check for profanity
     if (containsProfanity(content)) {
@@ -23,6 +23,7 @@ export const sendGlobalMessage = async (senderId, senderName, content, senderAva
       senderAvatar,
       senderAge,
       senderGender,
+      senderRole,
       timestamp: serverTimestamp(),
       read: false
     });

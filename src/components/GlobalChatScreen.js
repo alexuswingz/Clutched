@@ -3,7 +3,9 @@ import { useNavigate } from 'react-router-dom';
 import { sendGlobalMessage, getGlobalChatMessages } from '../firebase/services/globalChatService';
 import { toggleMessageReaction, getMessageReactions, getUserReaction, REACTION_OPTIONS } from '../firebase/services/reactionService';
 import { useToast } from '../contexts/ToastContext';
-import { getUserAvatar, isDeveloperAccount } from '../utils/avatarUtils';
+import { getUserAvatar, isDeveloperAccount, processUserAvatar, getUserRoleBadge } from '../utils/avatarUtils';
+import { doc, getDoc } from 'firebase/firestore';
+import { db } from '../firebase/config';
 
 const GlobalChatScreen = ({ currentUser }) => {
   const navigate = useNavigate();
@@ -17,7 +19,79 @@ const GlobalChatScreen = ({ currentUser }) => {
   const [userReactions, setUserReactions] = useState({});
   const [showReactionPicker, setShowReactionPicker] = useState(null);
   const [longPressTimer, setLongPressTimer] = useState(null);
+  const [freshUserData, setFreshUserData] = useState(null);
+  const [userRoles, setUserRoles] = useState({}); // Cache for user roles
   const messagesEndRef = useRef(null);
+  
+  // Fetch fresh user data to get updated custom images
+  const fetchFreshUserData = async () => {
+    if (!currentUser?.id) return;
+    
+    try {
+      const userRef = doc(db, 'users', currentUser.id);
+      const userDoc = await getDoc(userRef);
+      
+      if (userDoc.exists()) {
+        const userData = userDoc.data();
+        setFreshUserData(userData);
+        console.log('GlobalChatScreen: Fresh user data loaded:', userData);
+      }
+    } catch (error) {
+      console.error('Error fetching fresh user data:', error);
+    }
+  };
+  
+  // Fetch fresh data on component mount
+  useEffect(() => {
+    fetchFreshUserData();
+  }, [currentUser?.id]);
+  
+  // Refresh data when component becomes visible (user navigates back to global chat)
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        fetchFreshUserData();
+      }
+    };
+    
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, []);
+  
+  // Use fresh user data if available, otherwise fall back to currentUser
+  const userData = freshUserData || currentUser;
+  
+  // Process user data to ensure correct avatar handling
+  const processedUser = processUserAvatar(userData);
+  
+  // Fetch user role for a specific user ID
+  const fetchUserRole = async (userId) => {
+    if (userRoles[userId]) {
+      return userRoles[userId]; // Return cached role
+    }
+    
+    try {
+      const userRef = doc(db, 'users', userId);
+      const userDoc = await getDoc(userRef);
+      
+      if (userDoc.exists()) {
+        const userData = userDoc.data();
+        const role = userData.role || (userData.isDeveloper ? 'developer' : null);
+        
+        // Cache the role
+        setUserRoles(prev => ({
+          ...prev,
+          [userId]: role
+        }));
+        
+        return role;
+      }
+    } catch (error) {
+      console.error('Error fetching user role:', error);
+    }
+    
+    return null;
+  };
 
   // Auto-scroll to bottom when new messages arrive
   const scrollToBottom = () => {
@@ -30,12 +104,18 @@ const GlobalChatScreen = ({ currentUser }) => {
 
   // Load global chat messages
   useEffect(() => {
-    if (!currentUser?.id) return;
+    if (!processedUser?.id) return;
 
-    console.log('Setting up global chat for user:', currentUser.id);
+    console.log('Setting up global chat for user:', processedUser.id);
     
     const unsubscribe = getGlobalChatMessages((messagesData) => {
       console.log('Received global chat messages:', messagesData.length);
+      // Debug: Log avatar data for messages
+      messagesData.forEach((message, index) => {
+        if (index < 3) { // Log first 3 messages for debugging
+          console.log(`Message ${index + 1} - Sender: ${message.senderName}, Avatar: ${message.senderAvatar?.substring(0, 50)}..., Role: ${message.senderRole}`);
+        }
+      });
       setMessages(messagesData);
       setIsLoading(false);
     });
@@ -44,11 +124,11 @@ const GlobalChatScreen = ({ currentUser }) => {
       console.log('Cleaning up global chat');
       unsubscribe();
     };
-  }, [currentUser?.id]);
+  }, [processedUser?.id]);
 
   // Load reactions for messages
   useEffect(() => {
-    if (!currentUser?.id || messages.length === 0) return;
+    if (!processedUser?.id || messages.length === 0) return;
 
     const reactionUnsubscribes = messages.map(message => {
       return getMessageReactions(message.id, (reactionData) => {
@@ -62,7 +142,7 @@ const GlobalChatScreen = ({ currentUser }) => {
     // Load user reactions for each message
     const loadUserReactions = async () => {
       const userReactionPromises = messages.map(async (message) => {
-        const userReaction = await getUserReaction(message.id, currentUser.id);
+        const userReaction = await getUserReaction(message.id, processedUser.id);
         return { messageId: message.id, reaction: userReaction };
       });
       
@@ -79,7 +159,20 @@ const GlobalChatScreen = ({ currentUser }) => {
     return () => {
       reactionUnsubscribes.forEach(unsubscribe => unsubscribe());
     };
-  }, [currentUser?.id, messages]);
+  }, [processedUser?.id, messages]);
+
+  // Fetch roles for all unique users in messages
+  useEffect(() => {
+    if (messages.length === 0) return;
+    
+    const uniqueUserIds = [...new Set(messages.map(msg => msg.senderId))];
+    
+    uniqueUserIds.forEach(userId => {
+      if (!userRoles[userId]) {
+        fetchUserRole(userId);
+      }
+    });
+  }, [messages, userRoles]);
 
   // Send message to global chat
   const handleSendMessage = async () => {
@@ -88,13 +181,21 @@ const GlobalChatScreen = ({ currentUser }) => {
     setIsSending(true);
     
     try {
+      console.log('Sending global message with user data:', {
+        id: processedUser.id,
+        username: processedUser.username || processedUser.name,
+        role: processedUser.role,
+        avatar: getUserAvatar(processedUser)?.substring(0, 50) + '...'
+      });
+      
       const result = await sendGlobalMessage(
-        currentUser.id,
-        currentUser.username || currentUser.name,
+        processedUser.id,
+        processedUser.username || processedUser.name,
         newMessage.trim(),
-        currentUser.avatar,
-        currentUser.age,
-        currentUser.gender
+        getUserAvatar(processedUser),
+        processedUser.age,
+        processedUser.gender,
+        processedUser.role
       );
 
       if (result.success) {
@@ -144,7 +245,7 @@ const GlobalChatScreen = ({ currentUser }) => {
   // Handle reaction selection
   const handleReactionSelect = async (messageId, reaction) => {
     try {
-      const result = await toggleMessageReaction(messageId, currentUser.id, reaction);
+      const result = await toggleMessageReaction(messageId, processedUser.id, reaction);
       if (result.success) {
         setShowReactionPicker(null);
         // Update local state immediately for better UX
@@ -272,20 +373,45 @@ const GlobalChatScreen = ({ currentUser }) => {
           messages.map((message) => (
             <div
               key={message.id}
-              className={`flex ${message.senderId === currentUser.id ? 'justify-end' : 'justify-start'} relative`}
+              className={`flex ${message.senderId === processedUser.id ? 'justify-end' : 'justify-start'} relative`}
             >
               <div className="max-w-xs lg:max-w-md">
-                {message.senderId !== currentUser.id && (
+                {message.senderId !== processedUser.id && (
                   <div className="flex items-center space-x-2 mb-1">
-                    <div className="w-6 h-6 bg-valorant-red rounded-full flex items-center justify-center">
-                      <span className="text-white text-xs font-bold">
-                        {message.senderName?.charAt(0)?.toUpperCase() || '?'}
-                      </span>
-                    </div>
+                    <img
+                      src={message.senderAvatar || '/images/default.jpg'}
+                      alt={message.senderName || 'User'}
+                      className="w-6 h-6 rounded-full object-cover"
+                      onError={(e) => {
+                        e.target.src = '/images/default.jpg';
+                        e.target.className = 'w-6 h-6 rounded-full object-cover';
+                      }}
+                    />
                     <div className="flex items-center space-x-2">
                       <span className="text-xs text-gray-300 font-semibold">
                         {message.senderName || 'Anonymous'}
                       </span>
+                      {/* Role Badge */}
+                      {(() => {
+                        const messageRole = message.senderRole || userRoles[message.senderId];
+                        console.log('Message role data:', message.senderName, 'Stored Role:', message.senderRole, 'Cached Role:', userRoles[message.senderId], 'Final Role:', messageRole);
+                        return messageRole;
+                      })() && (
+                        <span className={`text-xs px-2 py-1 rounded-lg border font-bold tracking-wider uppercase ${
+                          (message.senderRole || userRoles[message.senderId]) === 'developer' 
+                            ? 'text-red-300 bg-red-900/20 border-red-500/30'
+                            : (message.senderRole || userRoles[message.senderId]) === 'moderator'
+                            ? 'text-blue-300 bg-blue-900/20 border-blue-500/30'
+                            : (message.senderRole || userRoles[message.senderId]) === 'tester'
+                            ? 'text-green-300 bg-green-900/20 border-green-500/30'
+                            : 'text-gray-300 bg-gray-900/20 border-gray-500/30'
+                        }`}>
+                          {(message.senderRole || userRoles[message.senderId]) === 'developer' ? 'DEV' : 
+                           (message.senderRole || userRoles[message.senderId]) === 'moderator' ? 'MOD' : 
+                           (message.senderRole || userRoles[message.senderId]) === 'tester' ? 'TEST' : 
+                           (message.senderRole || userRoles[message.senderId])?.toUpperCase()}
+                        </span>
+                      )}
                       {message.senderAge && (
                         <span className="text-xs text-gray-400">
                           {message.senderAge}
@@ -307,11 +433,11 @@ const GlobalChatScreen = ({ currentUser }) => {
                 )}
                 <div
                   className={`px-4 py-3 rounded-2xl ${
-                    message.senderId === currentUser.id
+                    message.senderId === processedUser.id
                       ? 'bg-valorant-red text-white'
                       : 'bg-gray-700 text-white'
                   } relative`}
-                  style={message.senderId !== currentUser.id ? { marginLeft: '32px' } : {}}
+                  style={message.senderId !== processedUser.id ? { marginLeft: '32px' } : {}}
                   onContextMenu={(e) => handleLongPress(message.id, e)}
                   onTouchStart={() => handleTouchStart(message.id)}
                   onTouchEnd={handleTouchEnd}
