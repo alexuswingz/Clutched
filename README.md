@@ -83,6 +83,42 @@ The app uses Tailwind CSS with custom Valorant-themed colors and components. You
 - `src/index.css` - Global styles and component classes
 - Individual component files for specific styling
 
+## Deployment
+
+This app is configured for automatic deployment to AWS S3 on every push to the master branch.
+
+### Automatic Deployment Setup
+
+1. **AWS S3 Bucket**: Create an S3 bucket configured for static website hosting
+2. **IAM User**: Create an IAM user with S3 deployment permissions
+3. **GitHub Secrets**: Add AWS credentials as repository secrets
+4. **GitHub Actions**: The workflow will automatically deploy on master branch pushes
+
+See `s3-bucket-setup.md` for detailed setup instructions.
+
+### Manual Deployment
+
+```bash
+# Set environment variables
+export AWS_ACCESS_KEY_ID="your-access-key"
+export AWS_SECRET_ACCESS_KEY="your-secret-key"
+export S3_BUCKET_NAME="your-bucket-name"
+export AWS_REGION="us-east-1"
+
+# Run deployment script
+./deploy-s3.sh
+```
+
+### Required GitHub Secrets
+
+| Secret Name | Description |
+|-------------|-------------|
+| `AWS_ACCESS_KEY_ID` | AWS access key for deployment |
+| `AWS_SECRET_ACCESS_KEY` | AWS secret key for deployment |
+| `AWS_REGION` | S3 bucket region (e.g., us-east-1) |
+| `S3_BUCKET_NAME` | S3 bucket name |
+| `CLOUDFRONT_DISTRIBUTION_ID` | (Optional) CloudFront distribution ID |
+
 ## Future Enhancements
 
 - Real-time messaging with WebSocket
