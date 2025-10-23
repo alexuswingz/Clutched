@@ -1,5 +1,5 @@
 // User service for Firebase operations
-import { doc, setDoc, getDoc, updateDoc, collection, query, where, onSnapshot, orderBy, serverTimestamp } from 'firebase/firestore';
+import { doc, setDoc, getDoc, updateDoc, collection, query, where, onSnapshot, orderBy, serverTimestamp, getDocs, limit } from 'firebase/firestore';
 import { db } from '../config';
 import { processUsersAvatars } from '../../utils/avatarUtils';
 
@@ -137,15 +137,17 @@ export const setUserOffline = async (userId) => {
   return await updateUserActiveStatus(userId, false);
 };
 
-// Get users with active status
+// Get users with active status - OPTIMIZED VERSION
 export const getUsersWithActiveStatus = (currentUserId, callback) => {
   const usersRef = collection(db, 'users');
   const q = query(
     usersRef, 
-    orderBy('createdAt', 'desc')
+    orderBy('createdAt', 'desc'),
+    limit(50) // Limit to 50 users to reduce reads
   );
   
-  return onSnapshot(q, (snapshot) => {
+  // Use getDocs instead of onSnapshot to avoid real-time listeners
+  return getDocs(q).then((snapshot) => {
     const allUsers = snapshot.docs
       .map(doc => ({
         id: doc.id,
@@ -193,14 +195,16 @@ export const getUsersWithActiveStatus = (currentUserId, callback) => {
     
     const finalSortedUsers = developerAccount ? [developerAccount, ...otherUsers] : otherUsers;
     
-    console.log('Users with active status:', finalSortedUsers.length);
+    console.log('Users with active status (optimized):', finalSortedUsers.length);
     if (callback && typeof callback === 'function') {
       callback(finalSortedUsers);
     }
-  }, (error) => {
+    return finalSortedUsers;
+  }).catch((error) => {
     console.error('Error in user discovery with active status:', error);
     if (callback && typeof callback === 'function') {
       callback([]);
     }
+    return [];
   });
 };

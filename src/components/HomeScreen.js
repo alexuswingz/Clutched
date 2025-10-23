@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getUsersWithActiveStatus, setUserOnline, setUserOffline } from '../firebase/services/userService';
 import { createMatch as createMatchService } from '../firebase/services/matchService';
@@ -15,8 +15,12 @@ const HomeScreen = ({ currentUser }) => {
   const [swipedUsers, setSwipedUsers] = useState(new Set());
   const [isAnimating, setIsAnimating] = useState(false);
   const [animatingUserData, setAnimatingUserData] = useState(null);
+  const animationTimeoutRef = useRef(null);
   const navigate = useNavigate();
   const { showNotification } = useToast();
+
+  // Filter out swiped users in real-time
+  const availableUsers = users.filter(user => !swipedUsers.has(user.id));
 
   // Load swiped users from localStorage on component mount
   useEffect(() => {
@@ -85,37 +89,63 @@ const HomeScreen = ({ currentUser }) => {
     };
   }, [currentUser?.id]);
 
-  // Real-time user discovery from Firebase with active status
+  // Load users from Firebase (optimized - no real-time listener)
   useEffect(() => {
     if (!currentUser?.id) return;
 
-    const unsubscribe = getUsersWithActiveStatus(currentUser.id, (discoveredUsers) => {
-        // Filter out swiped users
-        const filteredUsers = discoveredUsers.filter(user => !swipedUsers.has(user.id));
-        
-        // Process users to ensure correct avatars (developer accounts use admin.jpg)
-        const usersWithImages = processUsersAvatars(filteredUsers);
-        
-        console.log('Original users:', discoveredUsers.length, 'Filtered users:', filteredUsers.length);
-        setUsers(usersWithImages);
+    const loadUsers = async () => {
+      try {
+        const users = await getUsersWithActiveStatus(currentUser.id, (discoveredUsers) => {
+          console.log('Loaded users:', discoveredUsers.length);
+          setUsers(discoveredUsers);
+          setIsLoading(false);
+        });
+      } catch (error) {
+        console.error('Error loading users:', error);
         setIsLoading(false);
-    });
+      }
+    };
 
-    return () => unsubscribe();
-  }, [currentUser?.id, swipedUsers]);
+    loadUsers();
+  }, [currentUser?.id]);
 
   // Reset index if it's out of bounds
   useEffect(() => {
-    if (users.length > 0 && currentIndex >= users.length) {
+    if (availableUsers.length > 0 && currentIndex >= availableUsers.length) {
       setCurrentIndex(0);
     }
-  }, [users.length, currentIndex]);
+  }, [availableUsers.length, currentIndex]);
 
+  // Handle index adjustment when available users array changes
+  useEffect(() => {
+    if (availableUsers.length > 0 && currentIndex >= availableUsers.length) {
+      console.log('Index out of bounds, resetting to 0');
+      setCurrentIndex(0);
+    }
+  }, [availableUsers, currentIndex]);
 
-  const currentUserData = isAnimating ? animatingUserData : users[currentIndex];
+  // Cleanup animation timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (animationTimeoutRef.current) {
+        clearTimeout(animationTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  const currentUserData = isAnimating ? animatingUserData : availableUsers[currentIndex];
+  
+  // Debug logging
+  console.log('HomeScreen Debug:', {
+    isAnimating,
+    currentIndex,
+    usersLength: users.length,
+    availableUsersLength: availableUsers.length,
+    currentUserData: currentUserData ? currentUserData.name || currentUserData.username : 'undefined'
+  });
 
   // Guard clause to prevent rendering when no user data
-  if (!currentUserData && users.length > 0) {
+  if (!currentUserData && availableUsers.length > 0) {
     return (
       <div className="h-screen bg-valorant-dark flex items-center justify-center animate-fade-in lg:max-w-md lg:mx-auto">
         <div className="text-center">
@@ -128,6 +158,8 @@ const HomeScreen = ({ currentUser }) => {
 
   const handleLike = async () => {
     if (!currentUserData || isAnimating) return;
+    
+    console.log('Starting like animation for:', currentUserData.name);
     
     // Store the current user data for animation
     setAnimatingUserData(currentUserData);
@@ -150,21 +182,25 @@ const HomeScreen = ({ currentUser }) => {
     localStorage.setItem(`clutched_swiped_${currentUser.id}`, JSON.stringify([...newSwipedUsers]));
     console.log('Added to swiped users:', currentUserData.id);
     
-    // Wait for animation to complete, then move to next user
-    setTimeout(() => {
-      setCurrentIndex((prev) => (prev + 1) % users.length);
-      // Reset animation state after index change
-      setTimeout(() => {
-        setIsAnimating(false);
-        setAnimatingUserData(null);
-      }, 50); // Small delay to ensure new card is rendered
-    }, 300); // 300ms animation duration
+    // Clear any existing timeout
+    if (animationTimeoutRef.current) {
+      clearTimeout(animationTimeoutRef.current);
+    }
+    
+    // Set timeout for animation completion
+    animationTimeoutRef.current = setTimeout(() => {
+      console.log('Animation completing for:', currentUserData.name);
+      setCurrentIndex(prev => (prev + 1) % availableUsers.length);
+      setIsAnimating(false);
+      setAnimatingUserData(null);
+      animationTimeoutRef.current = null;
+    }, 300);
   };
 
   const handlePass = () => {
     if (!currentUserData || isAnimating) return;
     
-    console.log('Passed:', currentUserData.name);
+    console.log('Starting pass animation for:', currentUserData.name);
     
     // Store the current user data for animation
     setAnimatingUserData(currentUserData);
@@ -179,15 +215,19 @@ const HomeScreen = ({ currentUser }) => {
     localStorage.setItem(`clutched_swiped_${currentUser.id}`, JSON.stringify([...newSwipedUsers]));
     console.log('Added to swiped users:', currentUserData.id);
     
-    // Wait for animation to complete, then move to next user
-    setTimeout(() => {
-      setCurrentIndex((prev) => (prev + 1) % users.length);
-      // Reset animation state after index change
-      setTimeout(() => {
-        setIsAnimating(false);
-        setAnimatingUserData(null);
-      }, 50); // Small delay to ensure new card is rendered
-    }, 300); // 300ms animation duration
+    // Clear any existing timeout
+    if (animationTimeoutRef.current) {
+      clearTimeout(animationTimeoutRef.current);
+    }
+    
+    // Set timeout for animation completion
+    animationTimeoutRef.current = setTimeout(() => {
+      console.log('Animation completing for:', currentUserData.name);
+      setCurrentIndex(prev => (prev + 1) % availableUsers.length);
+      setIsAnimating(false);
+      setAnimatingUserData(null);
+      animationTimeoutRef.current = null;
+    }, 300);
   };
 
   const handleChat = async () => {
@@ -249,6 +289,9 @@ const HomeScreen = ({ currentUser }) => {
     // Wait for animation to complete, then navigate
     setTimeout(() => {
       console.log('Navigating to chat with user:', currentUserData);
+      // Reset animation state before navigating
+      setIsAnimating(false);
+      setAnimatingUserData(null);
       navigate('/chat', { state: { targetUser: currentUserData } });
     }, 300); // 300ms animation duration
   };
@@ -277,7 +320,7 @@ const HomeScreen = ({ currentUser }) => {
   }
 
   // Show no users message
-  if (users.length === 0) {
+  if (availableUsers.length === 0) {
     return (
       <div className="h-screen bg-valorant-dark flex items-center justify-center animate-fade-in lg:max-w-md lg:mx-auto">
         <div className="text-center px-6">
@@ -411,16 +454,6 @@ const HomeScreen = ({ currentUser }) => {
               <div className="absolute bottom-16 sm:bottom-20 left-0 right-0 p-3 sm:p-6">
                 <div className="flex items-end justify-between">
                   <div className="flex-1">
-                    {/* Developer Tag - Above Name */}
-                    {isDeveloperAccount(currentUserData) && (
-                      <div className="mb-2">
-                        <div className="inline-flex items-center bg-gradient-to-r from-red-600/20 to-red-500/20 backdrop-blur-sm border border-red-500/30 rounded-full px-3 py-1 shadow-lg">
-                          <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse mr-2"></div>
-                          <span className="text-red-300 font-bold text-xs tracking-wider">DEVELOPER</span>
-                        </div>
-                      </div>
-                    )}
-                    
                     {/* Role Badge - Positioned above name, left aligned */}
                     {getUserRoleBadge(currentUserData) && (
                       <div className="mb-3 flex justify-start">
