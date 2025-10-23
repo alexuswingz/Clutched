@@ -4,6 +4,7 @@ import { getUserMatches } from '../firebase/services/matchService';
 import { getChatMessages, sendMessage, markMessagesAsRead } from '../firebase/services/messageService';
 import { startMessageSync, stopMessageSync, addChatListener } from '../firebase/services/messageSyncManager';
 import { getUserProfile } from '../firebase/services/userService';
+import { toggleMessageReaction, getMessageReactions, getUserReaction, REACTION_OPTIONS } from '../firebase/services/reactionService';
 import { useToast } from '../contexts/ToastContext';
 import { collection, query, orderBy, limit, getDocs, where, onSnapshot, getDoc, doc } from 'firebase/firestore';
 import { db } from '../firebase/config';
@@ -23,6 +24,10 @@ const ChatScreen = ({ currentUser }) => {
   const [directChatUser, setDirectChatUser] = useState(null);
   const [chatInitialized, setChatInitialized] = useState(false);
   const [chatUserInfo, setChatUserInfo] = useState(null);
+  const [messageReactions, setMessageReactions] = useState({});
+  const [userReactions, setUserReactions] = useState({});
+  const [showReactionPicker, setShowReactionPicker] = useState(null);
+  const [longPressTimer, setLongPressTimer] = useState(null);
 
     // Check for direct chat user from navigation
     useEffect(() => {
@@ -740,6 +745,85 @@ const ChatScreen = ({ currentUser }) => {
     };
   }, [activeChat, currentUser?.id, showNotification]);
 
+  // Load reactions for messages
+  useEffect(() => {
+    if (!currentUser?.id || messages.length === 0) return;
+
+    const reactionUnsubscribes = messages.map(message => {
+      return getMessageReactions(message.id, (reactionData) => {
+        setMessageReactions(prev => ({
+          ...prev,
+          [message.id]: reactionData.reactions
+        }));
+      });
+    });
+
+    // Load user reactions for each message
+    const loadUserReactions = async () => {
+      const userReactionPromises = messages.map(async (message) => {
+        const userReaction = await getUserReaction(message.id, currentUser.id);
+        return { messageId: message.id, reaction: userReaction };
+      });
+      
+      const userReactions = await Promise.all(userReactionPromises);
+      const userReactionMap = {};
+      userReactions.forEach(({ messageId, reaction }) => {
+        userReactionMap[messageId] = reaction;
+      });
+      setUserReactions(userReactionMap);
+    };
+
+    loadUserReactions();
+
+    return () => {
+      reactionUnsubscribes.forEach(unsubscribe => unsubscribe());
+    };
+  }, [currentUser?.id, messages]);
+
+  // Handle long press to show reaction picker
+  const handleLongPress = (messageId, event) => {
+    event.preventDefault();
+    setShowReactionPicker(messageId);
+  };
+
+  // Handle touch start for long press
+  const handleTouchStart = (messageId) => {
+    const timer = setTimeout(() => {
+      setShowReactionPicker(messageId);
+    }, 500); // 500ms long press
+    setLongPressTimer(timer);
+  };
+
+  // Handle touch end to cancel long press
+  const handleTouchEnd = () => {
+    if (longPressTimer) {
+      clearTimeout(longPressTimer);
+      setLongPressTimer(null);
+    }
+  };
+
+  // Handle reaction selection
+  const handleReactionSelect = async (messageId, reaction) => {
+    try {
+      const result = await toggleMessageReaction(messageId, currentUser.id, reaction);
+      if (result.success) {
+        setShowReactionPicker(null);
+        // Update local state immediately for better UX
+        setUserReactions(prev => ({
+          ...prev,
+          [messageId]: prev[messageId] === reaction ? null : reaction
+        }));
+      }
+    } catch (error) {
+      console.error('Error adding reaction:', error);
+    }
+  };
+
+  // Close reaction picker
+  const closeReactionPicker = () => {
+    setShowReactionPicker(null);
+  };
+
   // Auto-scroll to bottom function
   const scrollToBottom = (smooth = true, retries = 3) => {
     const messagesContainer = document.querySelector('.messages-container');
@@ -1111,9 +1195,39 @@ const ChatScreen = ({ currentUser }) => {
                       msg.senderId === currentUser.id
                         ? 'bg-valorant-red text-white'
                         : 'bg-gray-700 text-white'
-                    }`}
+                    } relative`}
+                    onContextMenu={(e) => handleLongPress(msg.id, e)}
+                    onTouchStart={() => handleTouchStart(msg.id)}
+                    onTouchEnd={handleTouchEnd}
+                    onMouseDown={() => handleTouchStart(msg.id)}
+                    onMouseUp={handleTouchEnd}
+                    onMouseLeave={handleTouchEnd}
                   >
                     <p className="text-sm">{msg.content}</p>
+                    
+                    {/* Reactions Display */}
+                    {messageReactions[msg.id] && Object.keys(messageReactions[msg.id]).some(key => messageReactions[msg.id][key] > 0) && (
+                      <div className="flex flex-wrap gap-1 mt-2">
+                        {Object.entries(messageReactions[msg.id]).map(([reaction, count]) => {
+                          if (count > 0) {
+                            const reactionOption = REACTION_OPTIONS.find(opt => opt.key === reaction);
+                            return (
+                              <span
+                                key={reaction}
+                                className={`text-xs px-2 py-1 rounded-full ${
+                                  userReactions[msg.id] === reaction 
+                                    ? 'bg-valorant-red/20 border border-valorant-red/50' 
+                                    : 'bg-gray-600/50'
+                                }`}
+                              >
+                                {reactionOption?.emoji} {count}
+                              </span>
+                            );
+                          }
+                          return null;
+                        })}
+                      </div>
+                    )}
                   </div>
                 </div>
               ))
@@ -1272,9 +1386,39 @@ const ChatScreen = ({ currentUser }) => {
                       msg.senderId === currentUser.id
                         ? 'bg-valorant-red text-white'
                         : 'bg-gray-700 text-white'
-                    }`}
+                    } relative`}
+                    onContextMenu={(e) => handleLongPress(msg.id, e)}
+                    onTouchStart={() => handleTouchStart(msg.id)}
+                    onTouchEnd={handleTouchEnd}
+                    onMouseDown={() => handleTouchStart(msg.id)}
+                    onMouseUp={handleTouchEnd}
+                    onMouseLeave={handleTouchEnd}
                   >
                     <p className="text-sm">{msg.content}</p>
+                    
+                    {/* Reactions Display */}
+                    {messageReactions[msg.id] && Object.keys(messageReactions[msg.id]).some(key => messageReactions[msg.id][key] > 0) && (
+                      <div className="flex flex-wrap gap-1 mt-2">
+                        {Object.entries(messageReactions[msg.id]).map(([reaction, count]) => {
+                          if (count > 0) {
+                            const reactionOption = REACTION_OPTIONS.find(opt => opt.key === reaction);
+                            return (
+                              <span
+                                key={reaction}
+                                className={`text-xs px-2 py-1 rounded-full ${
+                                  userReactions[msg.id] === reaction 
+                                    ? 'bg-valorant-red/20 border border-valorant-red/50' 
+                                    : 'bg-gray-600/50'
+                                }`}
+                              >
+                                {reactionOption?.emoji} {count}
+                              </span>
+                            );
+                          }
+                          return null;
+                        })}
+                      </div>
+                    )}
                   </div>
                 </div>
               ))
@@ -1528,9 +1672,39 @@ const ChatScreen = ({ currentUser }) => {
                       msg.senderId === currentUser.id
                         ? 'bg-valorant-red text-white'
                         : 'bg-gray-700 text-white'
-                    }`}
+                    } relative`}
+                    onContextMenu={(e) => handleLongPress(msg.id, e)}
+                    onTouchStart={() => handleTouchStart(msg.id)}
+                    onTouchEnd={handleTouchEnd}
+                    onMouseDown={() => handleTouchStart(msg.id)}
+                    onMouseUp={handleTouchEnd}
+                    onMouseLeave={handleTouchEnd}
                   >
                     <p className="text-sm">{msg.content}</p>
+                    
+                    {/* Reactions Display */}
+                    {messageReactions[msg.id] && Object.keys(messageReactions[msg.id]).some(key => messageReactions[msg.id][key] > 0) && (
+                      <div className="flex flex-wrap gap-1 mt-2">
+                        {Object.entries(messageReactions[msg.id]).map(([reaction, count]) => {
+                          if (count > 0) {
+                            const reactionOption = REACTION_OPTIONS.find(opt => opt.key === reaction);
+                            return (
+                              <span
+                                key={reaction}
+                                className={`text-xs px-2 py-1 rounded-full ${
+                                  userReactions[msg.id] === reaction 
+                                    ? 'bg-valorant-red/20 border border-valorant-red/50' 
+                                    : 'bg-gray-600/50'
+                                }`}
+                              >
+                                {reactionOption?.emoji} {count}
+                              </span>
+                            );
+                          }
+                          return null;
+                        })}
+                      </div>
+                    )}
                   </div>
                 </div>
               ))
@@ -1582,6 +1756,30 @@ const ChatScreen = ({ currentUser }) => {
             >
               Back to Chat List
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Reaction Picker */}
+      {showReactionPicker && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div 
+            className="absolute inset-0 bg-black/50" 
+            onClick={closeReactionPicker}
+          ></div>
+          <div className="relative bg-gray-800 rounded-2xl p-4 shadow-2xl">
+            <div className="flex space-x-4">
+              {REACTION_OPTIONS.map((option) => (
+                <button
+                  key={option.key}
+                  onClick={() => handleReactionSelect(showReactionPicker, option.key)}
+                  className="w-12 h-12 flex items-center justify-center text-2xl hover:scale-125 transition-transform bg-gray-700 rounded-full hover:bg-gray-600"
+                  title={option.label}
+                >
+                  {option.emoji}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
       )}
